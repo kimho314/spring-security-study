@@ -78,3 +78,91 @@ public interface SecurityContext extends Serializable {
 - basic.realmName("LUNA") : 해당 설정을 통해 영역 이름을 "LUNA"로 변경할 수 있다.
 
 * authenticationEntryPoint : 인증이 실패했을 때의 응답을 맞춤 구성할 수 있는 설정.
+
+## form-based login 인증 구현
+
+![figure5.12](./fig5_12.png)
+
+- 인증 방식을 form-based login으로 변경하려면 구성 클래스의 configures(HttpSecurity http) 메서드에서 HttpSecurity 매개 변수의 formLogin() 메서드를 호출한다.
+
+```java
+@Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.csrf(csrf -> csrf.disable())
+            .formLogin(form -> form
+                .defaultSuccessUrl("/home", false))
+            .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+        ;
+
+        return http.build();
+    }
+```
+
+- UserDetailsService를 등록하지 않는 이상 기본 젝공된 자격 증명으로 로그인할 수 있다.
+- 이 자격 증명은 사용자 이름 'user'와 애플리케이션이 시작될 때 콘솔에 표시되는 UUID 암호다.
+- 아래 그림은 애플리케이션의 홈페이지를 렌더링하는 spring MVC 흐름이 나온다.
+
+  ![figure5.14](./fig5_14.png)
+
+* 위 같은 설정에서는 /home 경로에 접근하려고 하면 로그인할지 묻는 메시지가 표시된다.
+
+- 로그인을 /home에 매핑한 html 페이지로 이동한다.
+- /logout 경로에 접근하면 로그아웃 페이지로 redirection 된다.
+- 인증 성공과 실패 시 실행되는 논리를 맞춤 구성하려면 AuthenticationSuccessHandler 및 AuthenticationFailureHandler 객체를 이용할 수 있다. 아래 예제 코드는 AuthenticationSuccessHandler 및 AuthenticationFailureHandler을 지정하는 방법을 나타낸다.
+
+```java
+@Bean
+public CustomAuthenticationSuccessHandler getSuccessHandler() {
+    return new CustomAuthenticationSuccessHandler();
+}
+
+@Bean
+public CustomAuthenticationFailureHandler getFailureHandler() {
+    return new CustomAuthenticationFailureHandler();
+}
+
+@Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http.csrf(csrf -> csrf.disable())
+            .httpBasic(basic -> basic.realmName("LUNA")
+                .authenticationEntryPoint(new CustomEntryPoint()))
+            .formLogin(form -> form
+                .successHandler(getSuccessHandler())
+                .failureHandler(getFailureHandler()))
+            .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
+        ;
+
+        return http.build();
+    }
+```
+
+```java
+public class CustomAuthenticationSuccessHandler implements AuthenticationSuccessHandler {
+
+    @Override
+    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
+        throws IOException, ServletException {
+        Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
+        Optional<? extends GrantedAuthority> optionalGrantedAuthority = authorities.stream()
+            .filter(it -> it.getAuthority().equals("read"))
+            .findFirst();
+
+        if (optionalGrantedAuthority.isPresent()) {
+            response.sendRedirect("/home");
+        } else {
+            response.sendRedirect("/error");
+        }
+    }
+}
+```
+
+```java
+public class CustomAuthenticationFailureHandler implements AuthenticationFailureHandler {
+
+    @Override
+    public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception)
+        throws IOException, ServletException {
+        response.setHeader("failed", LocalDateTime.now().toString());
+    }
+}
+```
