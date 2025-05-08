@@ -120,3 +120,52 @@ public class SecurityConfig {
         return http.build();
     }
 ```
+
+### path variable에 대한 authorization 방법
+
+- path variable에 대한 인가를 적용하려면 `{path variable}`과 같이 작성하면 된다.
+
+```java
+@Order(3)
+    @Bean
+    public SecurityFilterChain configure3(HttpSecurity http) throws Exception {
+        http.csrf(csrf -> csrf.disable())
+            .httpBasic(Customizer.withDefaults())
+            .securityMatcher("/product/**")
+            .authorizeHttpRequests((auth) -> auth
+                .requestMatchers("/product/{code:^[0-9]*$}").permitAll()
+                .anyRequest().denyAll()
+            )
+        ;
+
+        return http.build();
+    }
+```
+
+- 위 예제는 `/product/` endpoint의 code path variable에 숫자로 구성된 문자열만 호출 허용한다는 의미이다.
+
+![figure8.1](./fig8.1.png)
+
+### 정규식으로 권한을 부여할 요청 선택하는 방법
+
+- 정규식을 사용하여 권한을 부여할 endpoint를 선택하려면 RegexRequestMatcher를 requestMatchers()에 사용하면 된다.
+- `/video/{country}/{language}` api가 있을때, 미국/캐나다/영국의 사용자고 영어를 사용하는 겅우에만 해당 api 접근을 허용하고 싶으면 RegexRequestMatcher 사용하여 아래와 같이 설정하면 된다.
+
+```java
+@Order(4)
+    @Bean
+    public SecurityFilterChain configure4(HttpSecurity http) throws Exception {
+        http.csrf(csrf -> csrf.disable())
+            .httpBasic(Customizer.withDefaults())
+            .securityMatcher("/video/**")
+            .authorizeHttpRequests((auth) -> auth
+                .requestMatchers(
+                    new RegexRequestMatcher(".*/(us|uk|ca)+/(en|fr).*", HttpMethod.GET.name()))
+                .authenticated()
+                .anyRequest().hasRole("PREMIUM")
+            )
+        ;
+
+        return http.build();
+    }
+```
